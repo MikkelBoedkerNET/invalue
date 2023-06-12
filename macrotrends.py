@@ -37,12 +37,10 @@ from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 
 
-
-class MacrotrendsData( DataBase ):
-
-    def __init__( self, ticker, freq = 'A', bulk_option = False ):
+class MacrotrendsData(DataBase):
+    def __init__(self, ticker, freq="A", bulk_option=False):
         DataBase.__init__(self)
-        #self.head = True
+        # self.head = True
         self.ticker = ticker
         self.freq = freq
         self.verbose = False
@@ -52,80 +50,90 @@ class MacrotrendsData( DataBase ):
             self.bulk_bool = True
 
     def income_statement(self):
-        return self._download_wrapper('income-statement')
+        return self._download_wrapper("income-statement")
 
     def balance_sheet(self):
-        return self._download_wrapper('balance-sheet')
+        return self._download_wrapper("balance-sheet")
 
     def cashflow_statement(self):
-        return self._download_wrapper('cash-flow-statement')
+        return self._download_wrapper("cash-flow-statement")
 
     def ratios(self):
-        return self._download_wrapper('financial-ratios')
-
+        return self._download_wrapper("financial-ratios")
 
     def _get_table(self, page_source):
-        soup = bs(page_source, 'html5lib')
-        rows = soup.find_all('div', attrs = { 'role': 'row' } )
+        soup = bs(page_source, "html5lib")
+        rows = soup.find_all("div", attrs={"role": "row"})
         temp = []
         for row in rows:
-            temp.append( [ cell.text for cell in row.find_all('div', attrs = { 'role': 'gridcell' } ) ] )
-        df = pd.DataFrame( temp, columns = [ col.text for col in soup.find_all('div', attrs = { 'role': 'columnheader' } ) ] )
-        if '' in df.columns:
-            df.drop('', axis = 1, inplace = True)
-        df.columns = ['Item'] + df.columns[1:].to_list()
+            temp.append(
+                [cell.text for cell in row.find_all("div", attrs={"role": "gridcell"})]
+            )
+        df = pd.DataFrame(
+            temp,
+            columns=[
+                col.text for col in soup.find_all("div", attrs={"role": "columnheader"})
+            ],
+        )
+        if "" in df.columns:
+            df.drop("", axis=1, inplace=True)
+        df.columns = ["Item"] + df.columns[1:].to_list()
         df.index = df.Item
-        df.drop('Item', axis = 1, inplace = True)
+        df.drop("Item", axis=1, inplace=True)
         return df
 
-
     def _download_wrapper(self, sheet):
-
         df = self._download(sheet)
         if type(df) == type(1):
             if self.verbose:
-                print('Retrying..')
+                print("Retrying..")
             df = self._download(sheet)
             if type(df) == type(1):
-                print('Failed to load data..')
+                print("Failed to load data..")
                 return None
 
-        df.replace('\$', '', regex = True, inplace = True)
-        df.replace(',', '', regex = True, inplace = True)
+        df.replace("\$", "", regex=True, inplace=True)
+        df.replace(",", "", regex=True, inplace=True)
         df = df.transpose()
-        df.columns = [ col.replace(' ', '_').replace('/','_to_').replace('.', '').replace('__', '_').replace('&', 'and').lower() for col in df.columns ]
+        df.columns = [
+            col.replace(" ", "_")
+            .replace("/", "_to_")
+            .replace(".", "")
+            .replace("__", "_")
+            .replace("&", "and")
+            .lower()
+            for col in df.columns
+        ]
         for col in df.columns:
-            df[col] = [ 0 if i == "-" else i for i in df[col] ]
+            df[col] = [0 if i == "-" else i for i in df[col]]
 
-        df.replace('', 'nan', inplace = True)
-        df.index = pd.to_datetime(df.index, format = '%Y-%m-%d')
-        df.index.name = 'date'
-        df.sort_index(inplace = True)
-        return self._col_to_float(df).astype('float')
-
+        df.replace("", "nan", inplace=True)
+        df.index = pd.to_datetime(df.index, format="%Y-%m-%d")
+        df.index.name = "date"
+        df.sort_index(inplace=True)
+        return self._col_to_float(df).astype("float")
 
     def _download(self, sheet):
-
         if self.bulk_bool:
             driver = self.bulk_option
         else:
             caps = DesiredCapabilities().CHROME
             caps["pageLoadStrategy"] = "none"
             driver = webdriver.Chrome(ChromeDriverManager().install())
-            #if self.head == True:
+            # if self.head == True:
             #    driver.minimize_window()
 
-        url = f'https://www.macrotrends.net/stocks/charts/{self.ticker}'
+        url = f"https://www.macrotrends.net/stocks/charts/{self.ticker}"
 
-        #try:
+        # try:
         driver.get(url)
         time.sleep(2)
-        url = driver.current_url + f'{sheet}?freq={self.freq.upper()}'
-        #url += f'/{sheet}?freq={self.freq.upper()}'
+        url = driver.current_url + f"{sheet}?freq={self.freq.upper()}"
+        # url += f'/{sheet}?freq={self.freq.upper()}'
         driver.get(url)
-        #print(driver.find_elements_by_xpath( '//div[@role="columnheader"]')[2].text)
-        #element = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.XPATH, '//div[@role="columnheader"]')))
-        #except:
+        # print(driver.find_elements_by_xpath( '//div[@role="columnheader"]')[2].text)
+        # element = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.XPATH, '//div[@role="columnheader"]')))
+        # except:
         #    if self.verbose:
         #        print('Failed to load page...')
         #    if not self.bulk_bool:
@@ -133,78 +141,132 @@ class MacrotrendsData( DataBase ):
         #    return 1
 
         try:
-            element = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.XPATH, '//button[contains(text(), "Accept all")]')))
+            element = WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located(
+                    (By.XPATH, '//button[contains(text(), "Accept all")]')
+                )
+            )
         except:
             pass
         try:
-            if driver.find_element(By.XPATH, '//button[contains(text(), "Accept all")]').text == "Accept all":
-                element = driver.find_element(By.XPATH, '//button[contains(text(), "Accept all")]')
-                driver.execute_script("arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'center'});", element)
+            if (
+                driver.find_element(
+                    By.XPATH, '//button[contains(text(), "Accept all")]'
+                ).text
+                == "Accept all"
+            ):
+                element = driver.find_element(
+                    By.XPATH, '//button[contains(text(), "Accept all")]'
+                )
+                driver.execute_script(
+                    "arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'center'});",
+                    element,
+                )
                 ActionChains(driver).move_to_element(element).click().perform()
                 time.sleep(0.75)
         except:
             pass
 
-        dfs = [ self._get_table(driver.page_source) ]
-        bool, check, double_check = True, '', 0
+        dfs = [self._get_table(driver.page_source)]
+        bool, check, double_check = True, "", 0
         first = driver.find_element(By.XPATH, '//div[@role="columnheader"]').text
+        first_round = True
 
         while bool:
             try:
-                if driver.find_element(By.XPATH, '//button[contains(text(), "Accept all")]').text == "Accept all":
-                    element = driver.find_element(By.XPATH, '//button[contains(text(), "Accept all")]')
-                    driver.execute_script("arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'center'});", element)
+                if (
+                    driver.find_element(
+                        By.XPATH, '//button[contains(text(), "Accept all")]'
+                    ).text
+                    == "Accept all"
+                ):
+                    element = driver.find_element(
+                        By.XPATH, '//button[contains(text(), "Accept all")]'
+                    )
+                    driver.execute_script(
+                        "arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'center'});",
+                        element,
+                    )
                     ActionChains(driver).move_to_element(element).click().perform()
                     time.sleep(0.75)
-                    dfs.append( self._get_table(driver.page_source) )
+                    dfs.append(self._get_table(driver.page_source))
             except:
                 pass
 
-            #ActionChains(driver).release(element).move_by_offset(-50, -50).perform()
+            # ActionChains(driver).release(element).move_by_offset(-50, -50).perform()
             element = driver.find_elements(By.XPATH, '//div[@role="gridcell"]')[-1]
-            driver.execute_script("arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'center'});", element)
-            element = WebDriverWait(driver, 30).until(EC.presence_of_element_located((By.XPATH, '//div[@class="jqx-reset jqx-icon-arrow-right"]')))
-            element = driver.find_element(By.XPATH, '//div[@class="jqx-reset jqx-icon-arrow-right"]')
-            driver.execute_script("arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'center'});", element)
+            driver.execute_script(
+                "arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'center'});",
+                element,
+            )
+            element = WebDriverWait(driver, 30).until(
+                EC.presence_of_element_located(
+                    (By.XPATH, '//div[@class="jqx-reset jqx-icon-arrow-right"]')
+                )
+            )
+
+            element = driver.find_element(
+                By.XPATH, '//div[@class="jqx-reset jqx-icon-arrow-right"]'
+            )
+
+            driver.execute_script(
+                "arguments[0].scrollIntoView({behavior: 'auto', block: 'center', inline: 'center'});",
+                element,
+            )
+            if first_round:
+                time.sleep(7)
             ActionChains(driver).click_and_hold(element).perform()
-            #while check == first:
+            # while check == first:
             # click and hold wait
-            time.sleep(3)
+            time.sleep(2)
             ActionChains(driver).release(element).move_by_offset(-50, -50).perform()
             try:
-                first = driver.find_elements(By.XPATH, '//div[@role="columnheader"]')[2].text
+                first = driver.find_elements(By.XPATH, '//div[@role="columnheader"]')[
+                    2
+                ].text
             except:
-                first = driver.find_elements(By.XPATH, '//div[@role="columnheader"]')[2].text
-            #ActionChains(driver).release(element).move_by_offset(-50, -50).perform()
+                first = driver.find_elements(By.XPATH, '//div[@role="columnheader"]')[
+                    2
+                ].text
+            # ActionChains(driver).release(element).move_by_offset(-50, -50).perform()
             time.sleep(1)
-            if len(driver.find_elements(By.XPATH, '//button[contains(text(), "Accept all")]')) == 0:
-                dfs.append( self._get_table(driver.page_source) )
+            if (
+                len(
+                    driver.find_elements(
+                        By.XPATH, '//button[contains(text(), "Accept all")]'
+                    )
+                )
+                == 0
+            ):
+                dfs.append(self._get_table(driver.page_source))
 
-
-            if check == first: #driver.find_elements_by_xpath( '//div[@role="columnheader"]')[-1].text:
+            if (
+                check == first
+            ):  # driver.find_elements_by_xpath( '//div[@role="columnheader"]')[-1].text:
                 if double_check == 0:
                     bool = False
                 double_check += 1
+            check = first  # driver.find_elements_by_xpath( '//div[@role="columnheader"]')[-1].text
+            first_round = False
 
-            check = first #driver.find_elements_by_xpath( '//div[@role="columnheader"]')[-1].text
-        df = pd.concat(dfs, axis = 1)
-        df = df.loc[:,~df.columns.duplicated()]
+        df = pd.concat(dfs, axis=1)
+        df = df.loc[:, ~df.columns.duplicated()]
 
         if not self.bulk_bool:
             driver.quit()
-            #return 1
+            # return 1
 
         return df
 
 
 # quick test
 
-#m = MacrotrendsData('TSLA', freq = 'Q')
-#m.head = True
-#df = m.ratios()
+# m = MacrotrendsData('TSLA', freq = 'Q')
+# m.head = True
+# df = m.ratios()
 
-#df
+# df
 
-#m.cashflow_statement()
-#m.ratios()
-#m.balance_sheet()
+# m.cashflow_statement()
+# m.ratios()
+# m.balance_sheet()
